@@ -25,71 +25,40 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['DATABASE'] = 'potholes.db'
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
+app.config['SECRET_KEY'] = 'your-secret-key-here'
 app.config['MAX_CONTENT_LENGTH'] = 16*1024*1024  # 16 MB
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # ------------------------
-# SAM Model (Optimized)
+# SAM Model
 # ------------------------
 predictor = None
 sam_loaded = False
 
 def init_sam():
-    """
-    Initialize SAM model:
-    - Downloads checkpoint if missing
-    - Supports retries with exponential backoff
-    - Loads model to device (CPU or GPU)
-    """
     global predictor, sam_loaded
     try:
-        import requests
-        import time
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {device}")
 
-        checkpoint = os.environ.get(
-            'SAM_CHECKPOINT_PATH',
-            os.path.join(app.config['UPLOAD_FOLDER'], "sam_vit_b_01ec64.pth")
-        )
-        checkpoint_url = os.environ.get(
-            'SAM_CHECKPOINT_URL',
-            "https://huggingface.co/lllyasviel/Annotators/resolve/main/sam_vit_b_01ec64.pth"
-        )
+        checkpoint_name = "sam_vit_b_01ec64.pth"
+        checkpoint_path = os.path.join(os.path.dirname(__file__), checkpoint_name)
 
-        # Download checkpoint if missing
-        if not os.path.exists(checkpoint) or os.path.getsize(checkpoint) < 1024:
-            logger.info(f"Downloading SAM checkpoint from {checkpoint_url}...")
-            max_attempts = 5
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    with requests.get(checkpoint_url, stream=True, timeout=60) as r:
-                        r.raise_for_status()
-                        with open(checkpoint, 'wb') as f:
-                            for chunk in r.iter_content(chunk_size=8192):
-                                if chunk:
-                                    f.write(chunk)
-                    logger.info("SAM checkpoint downloaded successfully!")
-                    break
-                except Exception as e:
-                    wait = min(30, 2 ** attempt)
-                    logger.error(f"Attempt {attempt}/{max_attempts} failed: {e}. Retrying in {wait}s...")
-                    time.sleep(wait)
-            else:
-                logger.error("Failed to download SAM checkpoint after retries. SAM will not be loaded.")
-                return False
+        # If model is not in the repo, download it as a fallback.
+        if not os.path.exists(checkpoint_path):
+            logger.warning(f"SAM checkpoint '{checkpoint_name}' not found. Downloading as a fallback...")
+            model_url = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"
+            torch.hub.download_url_to_file(model_url, checkpoint_path)
+            logger.info("SAM checkpoint downloaded successfully.")
 
-        # Load SAM
-        sam = sam_model_registry["vit_b"](checkpoint=checkpoint)
+        sam = sam_model_registry["vit_b"](checkpoint=checkpoint_path)
         sam.to(device)
         predictor = SamPredictor(sam)
         sam_loaded = True
         logger.info("SAM loaded successfully!")
         return True
-
     except Exception as e:
-        logger.error(f"SAM initialization error: {e}")
+        logger.error(f"SAM init error: {str(e)}")
         return False
 
 # ------------------------
@@ -124,6 +93,8 @@ def estimate_area(area_pixels):
     return area_pixels / (pixels_per_meter**2)
 
 def estimate_depth(area_m2):
+    # Rough depth estimation: small area -> shallow, large area -> deeper
+    # Example scaling: 0.05 m minimum, +0.2 m for large potholes
     return 0.05 + min(area_m2 * 0.5, 0.5)
 
 def determine_severity(area_m2):
@@ -141,16 +112,20 @@ def overlay_image(image_np, mask):
 # ------------------------
 @app.route('/')
 def index():
-    return render_template('index.html', sam_loaded=sam_loaded)
+    return render_template('index1.html', sam_loaded=sam_loaded)
 
 @app.route('/health')
-def health():
-    return jsonify({'status': 'ok', 'sam_loaded': sam_loaded}), 200
+def health_check():
+    """Provides a health check endpoint for the frontend to poll."""
+    return jsonify({
+        'status': 'ok',
+        'sam_loaded': sam_loaded
+    })
 
 @app.route('/detect', methods=['POST'])
 def detect_pothole():
     if not sam_loaded:
-        return jsonify({'error': 'SAM not loaded yet'}), 500
+        return jsonify({'error': 'SAM not loaded'}), 500
     if 'image' not in request.files:
         return jsonify({'error': 'No image uploaded'}), 400
 
@@ -165,8 +140,8 @@ def detect_pothole():
     image_np = np.array(image)
 
     predictor.set_image(image_np)
-    h, w = image_np.shape[:2]
-    input_point = np.array([[w//2, h//2]])
+    h,w = image_np.shape[:2]
+    input_point = np.array([[w//2,h//2]])
     input_label = np.array([1])
 
     masks, scores, _ = predictor.predict(
@@ -175,7 +150,7 @@ def detect_pothole():
         multimask_output=False
     )
 
-    if len(masks) == 0 or masks[0].size == 0:
+    if len(masks)==0 or masks[0].size==0:
         return jsonify({'success': False})
 
     mask = masks[0]
@@ -290,30 +265,24 @@ def show_map():
     rows = c.fetchall()
     conn.close()
     center = (rows[0][0], rows[0][1]) if rows else (40.7128, -74.0060)
-    m = folium.Map(location=center, zoom_start=13)
+    m = folium.Map(
+        location=center, zoom_start=13,
+        tiles='http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        attr='© Google'
+    )
     for lat, lon, severity, pid in rows:
         color = 'red' if severity=='high' else 'orange' if severity=='medium' else 'green'
         folium.Marker([lat, lon], popup=f"Pothole #{pid}\nSeverity: {severity}", icon=folium.Icon(color=color)).add_to(m)
     return m._repr_html_()
 
 # ------------------------
-# Initialization
+# Main
 # ------------------------
 def initialize_app():
+    init_sam()
     init_db()
-    try:
-        import threading
-        threading.Thread(target=init_sam, daemon=True).start()
-    except Exception as e:
-        logger.error(f"Failed to start SAM background init: {str(e)}")
-    logger.info("App initialized (DB ready, SAM loading in background)")
+    logger.info("App initialized")
 
-initialize_app()
-
-# ------------------------
-# Run
-# ------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    socketio.run(app, host="0.0.0.0", port=port, debug=debug)
+    initialize_app()
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
