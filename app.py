@@ -491,4 +491,7 @@ def initialize_app():
 
 if __name__ == "__main__":
     initialize_app()
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    # Use environment variable for port, default to 5000 for local development
+    port = int(os.getenv('PORT', '5000'))
+    debug = os.getenv('FLASK_ENV') != 'production'
+    socketio.run(app, host="0.0.0.0", port=port, debug=debug)
