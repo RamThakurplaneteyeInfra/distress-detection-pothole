@@ -4,6 +4,8 @@ services:
     env: python
     plan: free
     buildCommand: |
+      git lfs install || true
+      git lfs pull || true
       chmod +x pre_build.sh || true
       ./pre_build.sh || true
       pip install --upgrade pip
