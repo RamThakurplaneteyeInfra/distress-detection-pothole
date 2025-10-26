@@ -156,9 +156,17 @@ def index():
 @app.route('/health')
 def health_check():
     """Provides a health check endpoint for the frontend to poll."""
+    checkpoint_name = "sam_vit_b_01ec64.pth"
+    checkpoint_path = os.path.join(os.path.dirname(__file__), checkpoint_name)
+    model_exists = os.path.exists(checkpoint_path)
+    model_size = os.path.getsize(checkpoint_path) if model_exists else 0
+    model_size_mb = model_size / (1024 * 1024) if model_exists else 0
+    
     return jsonify({
         'status': 'ok',
-        'sam_loaded': sam_loaded
+        'sam_loaded': sam_loaded,
+        'model_exists': model_exists,
+        'model_size_mb': round(model_size_mb, 2) if model_exists else 0
     })
 
 @app.route('/detect', methods=['POST'])
