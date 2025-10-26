@@ -52,13 +52,15 @@ def init_sam():
         checkpoint_name = "sam_vit_b_01ec64.pth"
         checkpoint_path = os.path.join(os.path.dirname(__file__), checkpoint_name)
 
-        # If model is not in the repo, download it as a fallback.
-        if not os.path.exists(checkpoint_path):
-            logger.warning(f"SAM checkpoint '{checkpoint_name}' not found. Downloading as a fallback...")
+        # Check if model file exists and is valid
+        if not os.path.exists(checkpoint_path) or os.path.getsize(checkpoint_path) < 1000000:
+            logger.warning(f"SAM checkpoint '{checkpoint_name}' not found or invalid. Downloading...")
             model_url = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"
+            logger.info(f"Downloading SAM model from {model_url}")
             torch.hub.download_url_to_file(model_url, checkpoint_path)
             logger.info("SAM checkpoint downloaded successfully.")
 
+        logger.info(f"Loading SAM model from {checkpoint_path}")
         sam = sam_model_registry["vit_b"](checkpoint=checkpoint_path)
         sam.to(device)
         predictor = SamPredictor(sam)
@@ -67,6 +69,9 @@ def init_sam():
         return True
     except Exception as e:
         logger.error(f"SAM init error: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False
 
 # ------------------------
