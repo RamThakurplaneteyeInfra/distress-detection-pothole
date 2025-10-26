@@ -2,13 +2,17 @@ from flask import Flask, request, jsonify, render_template, send_file, abort
 from flask_socketio import SocketIO
 from flask_cors import CORS
 from PIL import Image
-import io, os, sqlite3, logging
+import io, os, psycopg2, logging
 from datetime import datetime
 import numpy as np
 import torch
 from segment_anything import sam_model_registry, SamPredictor
 import folium
 from fpdf import FPDF
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # ------------------------
 # Logging configuration
@@ -23,10 +27,14 @@ app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['DATABASE'] = 'potholes.db'
-app.config['SECRET_KEY'] = 'your-secret-key-here'
-app.config['MAX_CONTENT_LENGTH'] = 16*1024*1024  # 16 MB
+app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
+app.config['DATABASE'] = os.getenv('DB_NAME', 'distress_db')
+app.config['DB_HOST'] = os.getenv('DB_HOST', 'localhost')
+app.config['DB_PORT'] = os.getenv('DB_PORT', '5432')
+app.config['DB_USER'] = os.getenv('DB_USER', 'postgres')
+app.config['DB_PASSWORD'] = os.getenv('DB_PASSWORD', 'admin')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
+app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 16*1024*1024))
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # ------------------------
@@ -64,26 +72,52 @@ def init_sam():
 # ------------------------
 # Database
 # ------------------------
-def init_db():
-    conn = sqlite3.connect(app.config['DATABASE'])
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS potholes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            latitude REAL,
-            longitude REAL,
-            severity TEXT,
-            area REAL,
-            depth_meters REAL,
-            image_path TEXT,
-            confidence REAL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            status TEXT DEFAULT 'reported'
+def get_db_connection():
+    """Get PostgreSQL database connection"""
+    try:
+        conn = psycopg2.connect(
+            host=app.config['DB_HOST'],
+            port=app.config['DB_PORT'],
+            database=app.config['DATABASE'],
+            user=app.config['DB_USER'],
+            password=app.config['DB_PASSWORD']
         )
-    ''')
-    conn.commit()
-    conn.close()
-    logger.info("Database initialized")
+        return conn
+    except psycopg2.Error as e:
+        logger.error(f"Database connection error: {e}")
+        return None
+
+def init_db():
+    """Initialize PostgreSQL database and create tables"""
+    conn = get_db_connection()
+    if not conn:
+        logger.error("Failed to connect to database")
+        return False
+    
+    try:
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS potholes (
+                id SERIAL PRIMARY KEY,
+                latitude DECIMAL(10, 8),
+                longitude DECIMAL(11, 8),
+                severity VARCHAR(20),
+                area DECIMAL(10, 4),
+                depth_meters DECIMAL(6, 3),
+                image_path TEXT,
+                confidence DECIMAL(4, 3),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status VARCHAR(20) DEFAULT 'reported'
+            )
+        ''')
+        conn.commit()
+        logger.info("Database initialized successfully")
+        return True
+    except psycopg2.Error as e:
+        logger.error(f"Database initialization error: {e}")
+        return False
+    finally:
+        conn.close()
 
 # ------------------------
 # Utility
