@@ -91,7 +91,7 @@ def init_db():
     """Initialize PostgreSQL database and create tables"""
     conn = get_db_connection()
     if not conn:
-        logger.error("Failed to connect to database")
+        logger.warning("Failed to connect to database. App will continue without database.")
         return False
     
     try:
@@ -114,7 +114,7 @@ def init_db():
         logger.info("Database initialized successfully")
         return True
     except psycopg2.Error as e:
-        logger.error(f"Database initialization error: {e}")
+        logger.warning(f"Database initialization error: {e}. App will continue without database.")
         return False
     finally:
         conn.close()
@@ -366,10 +366,11 @@ def show_map():
 # ------------------------
 def initialize_app():
     init_sam()
-    if init_db():
-        logger.info("App initialized successfully")
+    db_initialized = init_db()
+    if db_initialized:
+        logger.info("App initialized successfully with database")
     else:
-        logger.error("App initialization failed - database connection error")
+        logger.info("App initialized successfully without database (database features may be limited)")
 
 if __name__ == "__main__":
     initialize_app()
