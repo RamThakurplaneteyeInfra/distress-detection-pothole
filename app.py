@@ -42,21 +42,24 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # ------------------------
 predictor = None
 sam_loaded = False
+sam_loading_status = "not_started"  # not_started, downloading, loading, ready, failed
 
 def init_sam():
-    global predictor, sam_loaded
+    global predictor, sam_loaded, sam_loading_status
     try:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"Using device: {device}")
+        logger.info(f"[SAM Init] Using device: {device}")
+        sam_loading_status = "checking_model"
 
         checkpoint_name = "sam_vit_b_01ec64.pth"
         checkpoint_path = os.path.join(os.path.dirname(__file__), checkpoint_name)
 
         # Check if model file exists and is valid (actual size is ~375MB)
         if not os.path.exists(checkpoint_path):
-            logger.warning(f"SAM checkpoint '{checkpoint_path}' not found. Downloading...")
+            logger.warning(f"[SAM Init] Checkpoint '{checkpoint_path}' not found. Downloading...")
+            sam_loading_status = "downloading"
             model_url = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"
-            logger.info(f"Downloading SAM model from {model_url}")
+            logger.info(f"[SAM Init] Downloading from {model_url}")
             try:
                 import requests
                 import time
@@ -84,9 +87,10 @@ def init_sam():
                 logger.error(f"Failed to download SAM model: {e}")
                 raise
         elif os.path.getsize(checkpoint_path) < 100000000:  # Check if file is less than ~100MB (actual is 375MB)
-            logger.warning(f"SAM checkpoint exists but is too small ({os.path.getsize(checkpoint_path)} bytes). Downloading...")
+            logger.warning(f"[SAM Init] Checkpoint too small ({os.path.getsize(checkpoint_path)} bytes). Downloading...")
+            sam_loading_status = "downloading"
             model_url = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"
-            logger.info(f"Downloading SAM model from {model_url}")
+            logger.info(f"[SAM Init] Downloading from {model_url}")
             try:
                 import requests
                 import time
@@ -115,18 +119,21 @@ def init_sam():
                 logger.error(f"Failed to download SAM model: {e}")
                 raise
         else:
-            logger.info(f"SAM checkpoint found at {checkpoint_path} ({os.path.getsize(checkpoint_path) / (1024*1024):.2f} MB)")
+            logger.info(f"[SAM Init] Checkpoint found at {checkpoint_path} ({os.path.getsize(checkpoint_path) / (1024*1024):.2f} MB)")
 
-        logger.info(f"Loading SAM model from {checkpoint_path}")
+        logger.info(f"[SAM Init] Loading model into memory...")
+        sam_loading_status = "loading"
         sam = sam_model_registry["vit_b"](checkpoint=checkpoint_path)
         sam.to(device)
         predictor = SamPredictor(sam)
         sam_loaded = True
-        logger.info("SAM loaded successfully!")
+        sam_loading_status = "ready"
+        logger.info("[SAM Init] SAM loaded successfully!")
         return True
     except Exception as e:
-        logger.error(f"SAM init error: {str(e)}")
-        logger.error(f"Error type: {type(e).__name__}")
+        sam_loading_status = "failed"
+        logger.error(f"[SAM Init] Error: {str(e)}")
+        logger.error(f"[SAM Init] Error type: {type(e).__name__}")
         import traceback
         logger.error(traceback.format_exc())
         return False
@@ -219,12 +226,48 @@ def health_check():
     model_size = os.path.getsize(checkpoint_path) if model_exists else 0
     model_size_mb = model_size / (1024 * 1024) if model_exists else 0
     
+    # Determine model status
+    model_status = "not_found"
+    if model_exists and model_size_mb > 350:
+        model_status = "ready"
+    elif model_exists and model_size_mb > 0:
+        model_status = "downloading"
+    elif model_exists:
+        model_status = "invalid"
+    
     return jsonify({
         'status': 'ok',
         'sam_loaded': sam_loaded,
+        'sam_loading_status': sam_loading_status,
         'model_exists': model_exists,
-        'model_size_mb': round(model_size_mb, 2) if model_exists else 0
+        'model_size_mb': round(model_size_mb, 2) if model_exists else 0,
+        'model_status': model_status,
+        'sam_ready': sam_loaded and model_status == "ready",
+        'checkpoint_path': checkpoint_path
     })
+
+@app.route('/debug')
+def debug_info():
+    """Detailed debug endpoint for troubleshooting."""
+    checkpoint_name = "sam_vit_b_01ec64.pth"
+    checkpoint_path = os.path.join(os.path.dirname(__file__), checkpoint_name)
+    model_exists = os.path.exists(checkpoint_path)
+    
+    import os.path
+    debug_info = {
+        'sam_loaded': sam_loaded,
+        'sam_loading_status': sam_loading_status,
+        'model_file_exists': model_exists,
+        'model_file_path': checkpoint_path,
+        'model_file_size_bytes': os.path.getsize(checkpoint_path) if model_exists else 0,
+        'model_file_size_mb': round(os.path.getsize(checkpoint_path) / (1024 * 1024), 2) if model_exists else 0,
+        'working_directory': os.getcwd(),
+        'files_in_dir': sorted([f for f in os.listdir('.') if os.path.isfile(f)])[:20],
+        'torch_available': True,
+        'torch_device': "cuda" if torch.cuda.is_available() else "cpu"
+    }
+    
+    return jsonify(debug_info)
 
 @app.route('/detect', methods=['POST'])
 def detect_pothole():

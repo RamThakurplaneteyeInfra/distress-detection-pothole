@@ -6,6 +6,15 @@ services:
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
+      echo "=== Checking for SAM model ==="
+      ls -lh sam_vit_b_01ec64.pth || echo "SAM model not found"
+      if [ ! -f sam_vit_b_01ec64.pth ] || [ $(stat -c%s sam_vit_b_01ec64.pth 2>/dev/null || echo 0) -lt 375000000 ]; then
+        echo "=== Downloading SAM model ==="
+        curl -L --progress-bar -o sam_vit_b_01ec64.pth "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth" || echo "Download failed, will retry at runtime"
+      else
+        echo "=== SAM model already present ==="
+      fi
+      ls -lh sam_vit_b_01ec64.pth || echo "No SAM model"
     startCommand: gunicorn --worker-class eventlet --workers 1 --bind 0.0.0.0:$PORT app:app
     envVars:
       - key: PYTHON_VERSION
