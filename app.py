@@ -174,36 +174,18 @@ def detect_pothole():
     image_np = np.array(image)
 
     predictor.set_image(image_np)
-    h, w = image_np.shape[:2]
-    
-    # Try multiple points across the image for better detection
-    # Sample points: center, left-center, right-center, top-center, bottom-center
-    input_points = np.array([
-        [w//2, h//2],        # Center
-        [w//4, h//2],        # Left-center
-        [3*w//4, h//2],      # Right-center
-        [w//2, h//4],        # Top-center
-        [w//2, 3*h//4]       # Bottom-center
-    ])
-    input_labels = np.array([1, 1, 1, 1, 1])
+    h,w = image_np.shape[:2]
+    input_point = np.array([[w//2,h//2]])
+    input_label = np.array([1])
 
-    # Try single point first (center)
     masks, scores, _ = predictor.predict(
-        point_coords=input_points[[0]],
-        point_labels=input_labels[[0]],
-        multimask_output=True
+        point_coords=input_point,
+        point_labels=input_label,
+        multimask_output=False
     )
 
     if len(masks)==0 or masks[0].size==0:
-        # Try with multiple points if single point fails
-        masks, scores, _ = predictor.predict(
-            point_coords=input_points,
-            point_labels=input_labels,
-            multimask_output=True
-        )
-        
-        if len(masks)==0 or masks[0].size==0:
-            return jsonify({'success': False, 'error': 'No pothole detected'})
+        return jsonify({'success': False})
 
     mask = masks[0]
     confidence = float(scores[0])
@@ -219,35 +201,36 @@ def detect_pothole():
     overlay = overlay_image(image_np, mask)
     Image.fromarray(overlay).save(filepath)
 
+    # Try to save to database if available
+    pothole_id = None
     conn = get_db_connection()
-    if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
-    
-    try:
-        c = conn.cursor()
-        c.execute('''
-            INSERT INTO potholes (latitude, longitude, severity, area, depth_meters, image_path, confidence)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        ''', (latitude, longitude, severity, area_m2, depth_meters, filepath, confidence))
-        pothole_id = c.fetchone()[0]
-        conn.commit()
-    except psycopg2.Error as e:
-        logger.error(f"Database insert error: {e}")
-        return jsonify({'error': 'Failed to save pothole data'}), 500
-    finally:
-        conn.close()
-
-    socketio.emit('new_pothole', {
-        'id': pothole_id,
-        'latitude': latitude,
-        'longitude': longitude,
-        'severity': severity,
-        'area': area_m2,
-        'depth_meters': depth_meters,
-        'confidence': confidence,
-        'timestamp': datetime.now().isoformat()
-    })
+    if conn:
+        try:
+            c = conn.cursor()
+            c.execute('''
+                INSERT INTO potholes (latitude, longitude, severity, area, depth_meters, image_path, confidence)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            ''', (latitude, longitude, severity, area_m2, depth_meters, filepath, confidence))
+            pothole_id = c.fetchone()[0]
+            conn.commit()
+            
+            socketio.emit('new_pothole', {
+                'id': pothole_id,
+                'latitude': latitude,
+                'longitude': longitude,
+                'severity': severity,
+                'area': area_m2,
+                'depth_meters': depth_meters,
+                'confidence': confidence,
+                'timestamp': datetime.now().isoformat()
+            })
+        except psycopg2.Error as e:
+            logger.error(f"Database insert error: {e}")
+        finally:
+            conn.close()
+    else:
+        logger.warning("No database connection available - results not saved to database")
 
     return jsonify({
         'success': True,
@@ -256,14 +239,15 @@ def detect_pothole():
         'area_m2': area_m2,
         'depth_meters': depth_meters,
         'confidence': confidence,
-        'image_url': f'/image/{filename}'
+        'image_url': f'/image/{filename}',
+        'saved_to_db': pothole_id is not None
     })
 
 @app.route('/potholes')
 def get_potholes():
     conn = get_db_connection()
     if not conn:
-        return jsonify({'error': 'Database connection failed'}), 500
+        return jsonify([])  # Return empty list if no database connection
     
     try:
         c = conn.cursor()
@@ -301,7 +285,7 @@ def get_image(filename):
 def export_pdf(pothole_id):
     conn = get_db_connection()
     if not conn:
-        return abort(500)
+        return "Database connection not available", 503
     
     try:
         c = conn.cursor()
@@ -339,7 +323,13 @@ def export_pdf(pothole_id):
 def show_map():
     conn = get_db_connection()
     if not conn:
-        return "Database connection failed", 500
+        center = (40.7128, -74.0060)  # Default center (New York)
+        m = folium.Map(
+            location=center, zoom_start=2,
+            tiles='http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+            attr='© Google'
+        )
+        return m._repr_html_()
     
     try:
         c = conn.cursor()
