@@ -489,8 +489,11 @@ def initialize_app():
     sam_thread.start()
     logger.info("SAM model loading started in background thread")
 
+# Initialize the app when module is imported (works for both development and production)
+# This ensures SAM model starts loading even when run with gunicorn
+initialize_app()
+
 if __name__ == "__main__":
-    initialize_app()
     # Use environment variable for port, default to 5000 for local development
     port = int(os.getenv('PORT', '5000'))
     debug = os.getenv('FLASK_ENV') != 'production'
