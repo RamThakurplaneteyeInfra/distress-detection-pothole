@@ -425,12 +425,26 @@ def show_map():
 # Main
 # ------------------------
 def initialize_app():
-    init_sam()
+    # Initialize database first (this is fast)
     db_initialized = init_db()
     if db_initialized:
         logger.info("App initialized successfully with database")
     else:
         logger.info("App initialized successfully without database (database features may be limited)")
+    
+    # Initialize SAM model in background thread (this is slow)
+    import threading
+    def load_sam_background():
+        logger.info("Starting SAM model initialization in background...")
+        success = init_sam()
+        if success:
+            logger.info("SAM model loaded successfully!")
+        else:
+            logger.error("Failed to load SAM model")
+    
+    sam_thread = threading.Thread(target=load_sam_background, daemon=True)
+    sam_thread.start()
+    logger.info("SAM model loading started in background thread")
 
 if __name__ == "__main__":
     initialize_app()
