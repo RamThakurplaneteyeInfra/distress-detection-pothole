@@ -2,7 +2,7 @@ services:
   - type: web
     name: road-pothole-detector
     env: python
-    plan: starter
+    plan: free
     buildCommand: |
       pip install --upgrade pip
       pip install -r requirements.txt
@@ -16,3 +16,17 @@ services:
         generateValue: true
       - key: WEB_CONCURRENCY
         value: 1
+      - key: DB_HOST
+        value: dpg-d3su87c9c44c73cdki1g-a.oregon-postgres.render.com
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_NAME
+        value: distress_db
+      - key: DB_USER
+        value: distress_db_user
+      - key: DB_PASSWORD
+        value: xZLgwESqa0z9OeMtZiAlYbidFQqLHDMv
+      - key: UPLOAD_FOLDER
+        value: uploads
+      - key: MAX_CONTENT_LENGTH
+        value: "16777216"
