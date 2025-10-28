@@ -81,7 +81,7 @@ print("[INFO] SAM model loaded successfully.")
 # ---------------------------------------------------
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index1.html")
 
 @app.route("/health")
 def health_check():
@@ -143,3 +143,4 @@ def download_pdf(filename):
 if __name__ == "__main__":
     print("[INFO] Starting server...")
     socketio.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+
