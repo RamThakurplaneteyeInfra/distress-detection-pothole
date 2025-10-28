@@ -10,7 +10,7 @@ services:
       ls -lh sam_vit_b_01ec64.pth || echo "SAM model not found"
       if [ ! -f sam_vit_b_01ec64.pth ] || [ $(stat -c%s sam_vit_b_01ec64.pth 2>/dev/null || echo 0) -lt 375000000 ]; then
         echo "=== Downloading SAM model ==="
-        curl -L --progress-bar -o sam_vit_b_01ec64.pth "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth" || echo "Download failed, will retry at runtime"
+        curl -L --progress-bar -o sam_vit_b_01ec64.pth "https://huggingface.co/AkhileshYR/sam-vit-b-model/resolve/main/sam_vit_b_01ec64.pth" || echo "Download failed, will retry at runtime"
       else
         echo "=== SAM model already present ==="
       fi
@@ -39,3 +39,4 @@ services:
         value: uploads
       - key: MAX_CONTENT_LENGTH
         value: "16777216"
+    healthCheckPath: /health
