@@ -140,7 +140,11 @@ def index():
 @app.route('/health')
 def health():
     return jsonify({"status": "ok"}), 200
-
+def safe_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 @app.route('/detect', methods=['POST'])
 def detect_pothole():
     if not sam_loaded:
@@ -152,8 +156,8 @@ def detect_pothole():
     if image_file.filename == '':
         return jsonify({'error': 'No image selected'}), 400
 
-    latitude = float(request.form.get('latitude', 0.0))
-    longitude = float(request.form.get('longitude', 0.0))
+    latitude = safe_float(request.form.get('latitude', 0.0))
+    longitude = safe_float(request.form.get('longitude', 0.0))
 
     image = Image.open(image_file.stream).convert('RGB')
     image_np = np.array(image)
@@ -303,5 +307,6 @@ def initialize_app():
 
 if __name__ == "__main__":
     initialize_app()
-    socketio.run(app, host="0.0.0.0", port=5000)
+    socketio.run(app, host="0.0.0.0", port=8000,allow_unsafe_werkzeug=True)
+
 
