@@ -32,7 +32,7 @@ class PotholeDetector {
   async checkBackendStatus() {
     const statusEl = document.getElementById("statusAlert");
     const setStatus = (cls, text) => {
-      statusEl.className = `alert ${cls} py-2`;
+      statusEl.className = alert ${cls} py-2;
       statusEl.textContent = text;
       statusEl.style.display = "block";
     };
@@ -77,7 +77,7 @@ class PotholeDetector {
         );
       }
     } catch (e) {
-      setStatus("alert-danger", `Backend check failed: ${e.message}`);
+      setStatus("alert-danger", Backend check failed: ${e.message});
     }
   }
 
@@ -93,11 +93,11 @@ class PotholeDetector {
       });
     } catch (err) {
       console.error("Error accessing camera:", err);
-      this.detectionResult.innerHTML = `
+      this.detectionResult.innerHTML = 
                 <div class="alert alert-warning">
                     Camera access denied or unavailable. On desktop, camera may be blocked; try image upload.
                 </div>
-            `;
+            ;
     }
   }
 
@@ -120,7 +120,7 @@ class PotholeDetector {
       this.addPotholeToList(pothole);
       this.addMarkerToMap(pothole);
       this.showNotification(
-        `New pothole detected! Severity: ${pothole.severity}`
+        New pothole detected! Severity: ${pothole.severity}
       );
     });
   }
@@ -148,12 +148,12 @@ class PotholeDetector {
     formData.append("longitude", this.currentLocation.longitude);
 
     try {
-      this.detectionResult.innerHTML = `
+      this.detectionResult.innerHTML = 
                 <div class="alert alert-info">
                     <div class="spinner-border spinner-border-sm me-2"></div>
                     Detecting potholes...
                 </div>
-            `;
+            ;
 
       const response = await fetch("/detect", {
         method: "POST",
@@ -163,7 +163,7 @@ class PotholeDetector {
 
       if (result.success) {
         const depth = result.depth_meters || 0.0;
-        this.detectionResult.innerHTML = `
+        this.detectionResult.innerHTML = 
                     <div class="alert alert-success">
                         <h6>Pothole Detected!</h6>
                         <p><strong>Severity:</strong> ${result.severity}</p>
@@ -180,25 +180,25 @@ class PotholeDetector {
                           result.image_url
                         }" class="img-fluid mt-2" alt="Detected pothole">
                     </div>
-                `;
+                ;
         // Enable PDF export
         this.pdfExportContainer.style.display = "block";
-        this.downloadPdfBtn.href = `/export/${result.pothole_id}`;
+        this.downloadPdfBtn.href = /export/${result.pothole_id};
       } else {
-        this.detectionResult.innerHTML = `
+        this.detectionResult.innerHTML = 
                     <div class="alert alert-warning">
                         No pothole detected. Please try a different image.
                     </div>
-                `;
+                ;
         this.pdfExportContainer.style.display = "none";
       }
     } catch (error) {
       console.error("Detection error:", error);
-      this.detectionResult.innerHTML = `
+      this.detectionResult.innerHTML = 
                 <div class="alert alert-danger">
                     Error detecting pothole: ${error.message}
                 </div>
-            `;
+            ;
     }
   }
 
@@ -257,11 +257,11 @@ class PotholeDetector {
   }
 
   addPotholeToList(pothole) {
-    const severityClass = `severity-${pothole.severity}`;
+    const severityClass = severity-${pothole.severity};
     const date = new Date(pothole.timestamp).toLocaleString();
     const div = document.createElement("div");
-    div.className = `card mb-2 ${severityClass}`;
-    div.innerHTML = `
+    div.className = card mb-2 ${severityClass};
+    div.innerHTML = 
             <div class="card-body py-2">
                 <h6 class="card-title mb-1">Pothole #${pothole.id}</h6>
                 <p class="card-text mb-1">
@@ -277,14 +277,14 @@ class PotholeDetector {
                 </p>
                 <p class="card-text mb-0"><small class="text-muted">${date}</small></p>
             </div>
-        `;
+        ;
     this.potholesList.prepend(div);
   }
 
   addMarkerToMap(pothole) {
     const marker = L.marker([pothole.latitude, pothole.longitude]).addTo(
       this.map
-    ).bindPopup(`
+    ).bindPopup(
                 <strong>Pothole #${pothole.id}</strong><br>
                 Severity: ${pothole.severity}<br>
                 Area: ${pothole.area.toFixed(2)} m²<br>
@@ -294,7 +294,7 @@ class PotholeDetector {
                     : "-"
                 }<br>
                 Confidence: ${(pothole.confidence * 100).toFixed(1)}%
-            `);
+            );
     this.markers.push(marker);
   }
 
@@ -322,7 +322,7 @@ class PotholeDetector {
       "alert alert-info alert-dismissible fade show position-fixed";
     notification.style.cssText =
       "top:20px;right:20px;z-index:1000;min-width:300px;";
-    notification.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    notification.innerHTML = ${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>;
     document.body.appendChild(notification);
     setTimeout(() => {
       if (notification.parentNode)
