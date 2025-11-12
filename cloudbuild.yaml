@@ -1,4 +1,6 @@
-# cloudbuild.yaml — fixed and validated
+# cloudbuild.yaml — validated for Cloud Build Triggers
+# Builds, pushes, and deploys your SAM model to Cloud Run
+
 substitutions:
   _AR_HOSTNAME: 'europe-west1-docker.pkg.dev'
   _AR_PROJECT_ID: 'lofty-voyage-477911-m6'
@@ -9,45 +11,41 @@ substitutions:
   _TRIGGER_ID: '46310ca3-3f21-444c-b59b-403ff8109133'
 
 steps:
-  # Step 1 — Build
+  # Step 1 — Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
     id: Build
-    entrypoint: bash
     args:
-      - -c
-      - |
-        IMAGE_URI="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest"
-        echo "Building ${IMAGE_URI}"
-        docker build -t "${IMAGE_URI}" .
+      [
+        'build',
+        '-t',
+        '${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest',
+        '.'
+      ]
 
-  # Step 2 — Push
+  # Step 2 — Push to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     id: Push
-    entrypoint: bash
     args:
-      - -c
-      - |
-        IMAGE_URI="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest"
-        echo "Pushing ${IMAGE_URI}"
-        docker push "${IMAGE_URI}"
+      [
+        'push',
+        '${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest'
+      ]
 
-  # Step 3 — Deploy
+  # Step 3 — Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: Deploy
-    entrypoint: bash
+    entrypoint: gcloud
     args:
-      - -c
-      - |
-        IMAGE_URI="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest"
-        echo "Deploying ${_SERVICE_NAME} to ${_DEPLOY_REGION}"
-        gcloud run deploy "${_SERVICE_NAME}" \
-          --image "${IMAGE_URI}" \
-          --region "${_DEPLOY_REGION}" \
-          --platform "${_PLATFORM}" \
-          --allow-unauthenticated \
-          --memory 8Gi \
-          --cpu 2 \
-          --timeout 900
+      [
+        'run', 'deploy', '${_SERVICE_NAME}',
+        '--image', '${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest',
+        '--region', '${_DEPLOY_REGION}',
+        '--platform', '${_PLATFORM}',
+        '--allow-unauthenticated',
+        '--memory', '8Gi',
+        '--cpu', '2',
+        '--timeout', '900'
+      ]
 
 options:
   logging: CLOUD_LOGGING_ONLY
