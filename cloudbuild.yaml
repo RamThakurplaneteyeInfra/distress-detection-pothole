@@ -1,28 +1,57 @@
+# cloudbuild.yaml
+# Compatible with Cloud Build Triggers and supports substitution variables
+# Project: lofty-voyage-477911-m6
+
+substitutions:
+  _AR_HOSTNAME: 'europe-west1-docker.pkg.dev'
+  _AR_PROJECT_ID: 'lofty-voyage-477911-m6'
+  _AR_REPOSITORY: 'cloud-run-source-deploy'
+  _DEPLOY_REGION: 'europe-west1'
+  _PLATFORM: 'managed'
+  _SERVICE_NAME: 'deploy'
+  _TRIGGER_ID: '46310ca3-3f21-444c-b59b-403ff8109133'
+
 steps:
-  # 1️⃣ Build Docker image
+  # Step 1: Build Docker image using combined variable string
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/distress-detection-pothole:latest', '.']
-
-  # 2️⃣ Push image to Artifact Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/distress-detection-pothole:latest']
-
-  # 3️⃣ Deploy image to Cloud Run
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
+    id: Build
+    entrypoint: bash
     args:
-      [
-        'run', 'deploy', 'distress-detection-pothole',
-        '--image', 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/distress-detection-pothole:latest',
-        '--region', 'europe-west1',
-        '--platform', 'managed',
-        '--allow-unauthenticated',
-        '--memory', '8Gi',
-        '--cpu', '2',
-        '--timeout', '900'
-      ]
-images:
-  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/distress-detection-pothole:latest'
-  options:
-  logging: CLOUD_LOGGING_ONLY
+      - -c
+      - |
+        IMAGE_URI="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest"
+        echo "Building image: ${IMAGE_URI}"
+        docker build -t "${IMAGE_URI}" .
 
+  # Step 2: Push image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        IMAGE_URI="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest"
+        echo "Pushing image: ${IMAGE_URI}"
+        docker push "${IMAGE_URI}"
+
+  # Step 3: Deploy to Cloud Run using gcloud CLI
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: Deploy
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        IMAGE_URI="${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:latest"
+        echo "Deploying to Cloud Run service: ${_SERVICE_NAME} in region ${_DEPLOY_REGION}"
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --image "${IMAGE_URI}" \
+          --region "${_DEPLOY_REGION}" \
+          --platform "${_PLATFORM}" \
+          --allow-unauthenticated \
+          --memory 8Gi \
+          --cpu 2 \
+          --timeout 900
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true
