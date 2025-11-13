@@ -6,6 +6,7 @@ WORKDIR /app
 
 # Install system dependencies (add OpenCV, model essentials)
 RUN apt-get update && apt-get install -y \
+    git \
     curl \
     build-essential \
     libsm6 \
