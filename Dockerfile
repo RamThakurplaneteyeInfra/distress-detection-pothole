@@ -38,4 +38,5 @@ ENV FLASK_ENV=production
 
 # Use Gunicorn + eventlet (critical for Flask-SocketIO!)
 # Use "app:socketio" as the entrypoint object if using Flask-SocketIO
-CMD exec gunicorn --worker-class eventlet --bind :$PORT --timeout 0 app:socketio
+CMD ["gunicorn", "--worker-class", "eventlet", "--bind", ":8080", "app:socketio"]
+
