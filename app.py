@@ -33,7 +33,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Model setup
 # ------------------------
 HF_MODEL_URL = "https://huggingface.co/AkhileshYR/sam-vit-b-model/resolve/main/sam_vit_b_01ec64.pth"
-MODEL_PATH = "sam_vit_b_01ec64.pth"
+MODEL_PATH = "/tmp/models/sam_vit_b_01ec64.pth"
 
 def download_model():
     """Download SAM model from Hugging Face if missing"""
@@ -311,6 +311,7 @@ initialize_app()
 if __name__ == "__main__":
     # Development/run locally:
     socketio.run(app, host="0.0.0.0", port=8080, allow_unsafe_werkzeug=True)
+
 
 
 
